@@ -251,7 +251,7 @@ void hpf_imp(double* imp, int row_idx, int nsamples, hpf_t hpf) {
 //                 " beta_hat    : In case a reverberation time is specified as an input parameter\n"
 //                 "               the corresponding reflection coefficient is returned.\n\n");
 
-#define NO_MICS 2
+#define NO_MICS 4
 
 void mexFunction(const long signal_length, const double *in, const double fs, const double *r_path, const double *s_path, double *out) {
     // Set parameters
@@ -575,7 +575,8 @@ int main() {
 
     fclose(fp);
 
-    double r_path[NO_MICS][3] = {{3-0.1, 3, 1.5}, {3+0.1, 3, 1.5}};
+    double r_path[NO_MICS][3] = {{3-0.1, 3-0.1, 1.5}, {3-0.1, 3+0.1, 1.5}, 
+                                {3+0.1, 3-0.1, 1.5}, {3+0.1, 3+0.1, 1.5}};
     double s_path[3] = {6, 6, 1.5};
 
     double *out = new double[NO_MICS * len];
