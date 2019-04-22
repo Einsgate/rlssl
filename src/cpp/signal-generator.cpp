@@ -39,14 +39,15 @@
 
 #define _USE_MATH_DEFINES
 
-//#include "matrix.h"
-//#include "mex.h"
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <sys/types.h>
+#include <pthread.h>
+#include <chrono>
+#include <iostream>
 
 using namespace std;
 
@@ -192,7 +193,7 @@ void hpf_imp(double* imp, int row_idx, int nsamples, hpf_t hpf) {
 //                 " out         : M x N matrix containing the generated signals.\n"
 //                 " beta_hat    : In case a reverberation time is specified as an input parameter\n"
 //                 "               the corresponding reflection coefficient is returned.\n\n");
-void mexFunction(const long signal_length, const double *in, const double fs, const double *rr, const double *ss, double *out) {
+void mexFunction(const long signal_length, const double *in, const double fs, const double *rr, const double *ss, double *out, int idx) {
    // Set parameters
    double          c = 340.0;
    double          LL[3] = {10, 10, 3};
@@ -279,11 +280,11 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
    // Type of microphone (optional)
    char *mtype = new char[no_mics];
    if (mtype_ptr != NULL) {
-       if (str_len(mtype_ptr) == 1) {
+       if (strlen(mtype_ptr) == 1) {
            for (int mic_idx = 0; mic_idx < no_mics; mic_idx++)
                mtype[mic_idx] = mtype_ptr[0];
        }
-       else if (str_len(mtype_ptr) == no_mics) {
+       else if (strlen(mtype_ptr) == no_mics) {
            for (int mic_idx = 0; mic_idx < no_mics; mic_idx++)
                mtype[mic_idx] = mtype_ptr[mic_idx];
        }
@@ -319,12 +320,12 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
    hpf.A1 = -(1+hpf.R1);
 
    // Declarations for image source method
-   //mxArray*   imp_mtx = new mxArray(nsamples, nsamples);
    double*      imp = new double[nsamples * nsamples];
+   assert(imp != NULL);
    const double cTs = c/fs;
    const int    Tw = 2 * ROUND(0.004*fs);
    double*      LPI = new double[Tw+1];
-   printf("LPI = %p, sizeof(double) = %d\n", LPI, sizeof(double));
+//printf("thread %d: LPI = %p, sizeof(double) = %d\n", LPI, sizeof(double), idx);
    double*      hanning_window = new double[Tw+1];
    double*      r = new double[3];
    double*      s = new double[3];
@@ -340,18 +341,18 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
 
    for (int idx = 0; idx < Tw+1; idx++)
        hanning_window[idx] = 0.5 * (1 + cos(2*M_PI*(idx+Tw/2)/Tw)); // Hanning window
-// printf("22222\n");
+ //printf("thread %d: 22222\n", idx);
    // Process each receiver seperately
    for (int mic_idx = 0; mic_idx < no_mics; mic_idx++) {
        angle[0] = angles[mic_idx];
        angle[1] = angles[mic_idx + no_mics];
-//printf("4444\n");
+//printf("thread %d: 4444\n", idx);
        // Clear response matrix
        for (long counter = 0; counter < nsamples*nsamples; counter++){
-           printf("counter = %ld, nsamples = %d, imp = %p\n", counter, nsamples, imp);
+//printf("counter = %ld, nsamples = %d, imp = %p\n", counter, nsamples, imp);
            imp[counter] = 0;
        }
-//printf("55555\n");
+//printf("thread %d: 55555\n", idx);
        for (long sample_idx = 0; sample_idx < signal_length; sample_idx++) {
            //char command_string[20];
            int  row_idx_1;
@@ -360,13 +361,13 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
            bool bRcvInvariant_1;
            bool bSrcInvariant_1;
            bool bSrcInvariant_2;
-//printf("6666\n");
+//printf("thread %d: 6666\n", idx);
            // Determine row_idx_1;
            row_idx_1 = sample_idx % nsamples;
 
            for(int idx=0; idx<3; idx++)
-               r[idx] = rr[sample_idx + idx*1 + 3*mic_idx*1]/cTs;
-//printf("7777\n");
+               r[idx] = rr[0 + idx*1 + 3*mic_idx*1]/cTs;
+//printf("thread %d: 7777\n", idx);
            if (sample_idx > 0) {
                //bSrcInvariant_1 = IsSrcPosConst(ss, signal_length, sample_idx, 0);
                //bRcvInvariant_1 = IsRcvPosConst(rr, signal_length, sample_idx, mic_idx);
@@ -377,7 +378,7 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
                bSrcInvariant_1 = false;
                bRcvInvariant_1 = false;
            }
-//printf("33333\n");
+//printf("thread %d: 33333\n", idx);
            if ((bRcvInvariant_1 && bSrcInvariant_1) == false) {
                if (bRcvInvariant_1 == false && sample_idx > 0) {
                    if (sample_idx < nsamples)
@@ -408,7 +409,7 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
 
                        // Get source position
                        for(int idx=0;idx<3;idx++)
-                           s[idx] = ss[sample_idx - row_counter + idx*1]/cTs;
+                           s[idx] = ss[0 - row_counter + idx*1]/cTs;
 
                        // Clear old impulse response
                        for (int idx = 0; idx < nsamples; idx++)
@@ -486,6 +487,8 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
        }
    }
 
+   delete[] mtype;
+   delete[] beta;
    delete[] angle;
    delete[] angles;
    delete[] hanning_window;
@@ -497,69 +500,97 @@ void mexFunction(const long signal_length, const double *in, const double fs, co
    delete[] imp;
 }
 
+#define NTHREAD	3
+double *out;
+int len;
+int fs;
+double *in;
+#define NUM_OF_SIGNALS 6561  // 9*9*9*9
 
-// Kernel funciton
-void kernel(const long signal_length, const double *in, const double fs, double *out) {
-   if(threadIdx.x >= ROOM_WIDTH || threadIdx.y >= ROOM_DEPTH)
-       return;
+void *thread_entry(void *s) {
+	pthread_t id = pthread_self();
+	int idx = *(int *)s;
 
-   // Compute receivers' and the source's positions
-   double rr[NO_MICS][3] = {
-           {threadIdx.x + 0.4, threadIdx.y + 0.4, 1.5},{threadIdx.x + 0.4, threadIdx.y + 0.6, 1.5},
-           {threadIdx.x + 0.6, threadIdx.y + 0.4, 1.5},{threadIdx.x + 0.6, threadIdx.y + 0.6, 1.5}};
-   double ss[3] = {blockIdx.x + 0.5, blockIdx.y + 0.5, 1.5};
+	// Bind this thread i to CPU i
+	// cpu_set_t mask;
+	// CPU_ZERO(&mask);
+	// CPU_SET(idx, &mask);
+	// if(pthread_setaffinity_np(id, sizeof(mask), &mask) < 0) {
+	// 	perror("pthread_setaffinity_np");
+	// }
 
-   // Compute address for result
-   int blockId = blockIdx.y + blockIdx.x * gridDim.y;
-   int threadId = blockId * (blockDim.x * blockDim.y)
-                  + (threadIdx.x * blockDim.y) + threadIdx.y;
-   double *res = out + threadId * signal_length * NO_MICS;
-   printf("%d th thread launched. Result offset is %d\n", threadId, threadId * signal_length * NO_MICS);
-   mexFunction(signal_length, in, fs, (double *)rr, ss, res);
+	// Thread main logic
+	//for(int i = 0; i < ROOM_WIDTH; i++){
+	for(int i = 0; i < 3; i++){
+		//for(int j = 0; j < ROOM_DEPTH; j++){
+		for(int j = 0; j < 3; j++){
+			printf("(%d, %d), %d starts.\n", idx, i, j);
+			//for(int k = 0; k < ROOM_WIDTH; k++){
+			for(int k = 0; k < 3; k++){
+				double rr[NO_MICS][3] = {{idx+0.4, i+0.4, 1.5}, {idx+0.4, i+0.6, 1.5}, 
+								{idx+0.6, i+0.4, 1.5}, {idx+0.6, i+0.6, 1.5}};
+				double ss[3] = {j+0.5, k+0.5, 1.5};
+				
+				// Compute result memory offset
+				int outIdx = ((idx*ROOM_DEPTH + i)*ROOM_WIDTH + j)*ROOM_DEPTH + k;
+				double *res = out + outIdx * len * NO_MICS;
+
+				// Generate signal
+				mexFunction(len, in, fs, (double *)rr, ss, res, idx);
+			}
+		}
+	}
+	
+
 }
 
 int main() {
-   int fs;
-   int len;
-   double *in;
+    // Read audio signal
+    FILE *fp = fopen("../matlab/input.dat", "r");
+    assert(fp != NULL);
+    fscanf(fp, "%d\n", &fs);
+    fscanf(fp, "%d\n", &len);
+    in = new double[len];
+    for(int i = 0; i < len; i++)
+        fscanf(fp, "%lf\n", in + i);
+    fclose(fp);
 
-   // Read audio signal
-   FILE *fp = fopen("../matlab/input.dat", "r");
-   assert(fp != NULL);
-   fscanf(fp, "%d\n", &fs);
-   fscanf(fp, "%d\n", &len);
-   in = new double[len];
-   for(int i = 0; i < len; i++)
-       fscanf(fp, "%lf\n", in + i);
-   fclose(fp);
+    // Initialize result
+    out = new double[NO_MICS*len*ROOM_DEPTH*ROOM_WIDTH*ROOM_DEPTH*ROOM_WIDTH];
+    assert(out != NULL);
 
-   // Malloc space for result
-   double *out = NULL;
-   const int NUM_OF_SIGNALS = 1;
-   checkCudaErrors(cudaMallocManaged ((void **) &out, sizeof(double) * NO_MICS * len * NUM_OF_SIGNALS));
-   checkCudaErrors(cudaDeviceSynchronize());
+auto start = std::chrono::high_resolution_clock::now();
 
-   // Determine blocksPerGrid and threadPerBlock
-   dim3 blocksPerGrid(9, 9);
-   dim3 threadPerBlock(9, 9);
+    // Create threads
+    pthread_t threadId[NTHREAD];
+    int threadIdx[NTHREAD];
+    for(int i = 0; i < NTHREAD; i++){
+        threadIdx[i] = i;
+        if(pthread_create(&threadId[i], NULL, thread_entry, threadIdx + i) != 0)
+            perror("pthread_create");
+    }
 
-   kernel<<<1, 1>>>(len, in, fs, out);
-   //mexFunction<<<blocksPerGrid，threadPerBlock>>>(len, in, fs, out);
+    // Wait for finishing
+    for(int i = 0; i < NTHREAD; i++){
+        pthread_join(threadId[i], NULL);
+    }
+auto finish = std::chrono::high_resolution_clock::now();
+std::chrono::duration<double> elapsed = finish - start;
+std::cout << "Elapsed time: " << elapsed.count() << " s\n";
 
-   checkCudaErrors(cudaDeviceSynchronize());
-
-   fp = fopen("output.dat", "w");
-   for(int k = 0; k < NUM_OF_SIGNALS; k++){
-       for(int i = 0; i < len; i++){
+    fp = fopen("output.dat", "w");
+    assert(fp != NULL);
+    for(int k = 0; k < NUM_OF_SIGNALS; k++){
+        for(int i = 0; i < len; i++){
            for(int j = 0; j < NO_MICS; j++){
                fprintf(fp, "%lf ", out[k*len*NO_MICS + i*NO_MICS + j]);
            }
            fprintf(fp, "\n");
-       }
-   }
-   fclose(fp);
+        }
+    }
+    fclose(fp);
 
-   return 0;
+    return 0;
 }
 
 

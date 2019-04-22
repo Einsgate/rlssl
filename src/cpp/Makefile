@@ -1,23 +1,27 @@
 CC = g++
+NAME = signal-generator
+
+CPPFLAGS ?= -std=c++11
+LDFLAGS = -lpthread
 
 ################################################################################
 
 # Target rules
 all: build
 
-build: signal-generator
+build: $(NAME)
 
-signal-generator.o: signal-generator.cpp
-	$(CC) -o $@ -c $<
+$(NAME).o: $(NAME).cpp
+	$(CC) $(CPPFLAGS) -o $@ -c $<
 
-signal-generator: signal-generator.o
-	$(CC) -o $@ $+
+$(NAME): $(NAME).o
+	$(CC)  -o $@ $+ $(LDFLAGS)
 
 run: build
-	./signal-generator
+	./$(NAME)
 
 clean:
-	rm -f signal-generator signal-generator.o
+	rm -f $(NAME) $(NAME).o
 
 clobber: clean
 

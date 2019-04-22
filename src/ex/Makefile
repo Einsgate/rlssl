@@ -1,5 +1,6 @@
 CC = g++
 NAME = ex
+LDFLAGS = -lpthread
 
 ################################################################################
 
@@ -12,7 +13,7 @@ $(NAME).o: $(NAME).cpp
 	$(CC) -o $@ -c $<
 
 $(NAME): $(NAME).o
-	$(CC) -o $@ $+
+	$(CC) -o $@ $+ $(LDFLAGS)
 
 run: build
 	./$(NAME)
