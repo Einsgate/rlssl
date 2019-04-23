@@ -2,3 +2,8 @@ CMakeLists.txt
 cmake-build-debug/
 sftp-config.json
 *.out
+__pycache__
+*.mexa64
+*.o
+*.swp
+*.env
