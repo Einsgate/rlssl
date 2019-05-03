@@ -41,6 +41,8 @@ class Maze(tk.Tk, object):
 
         self.load_env()
 
+    def seed(self, s):
+        random.seed(s)
 
     def _build_maze(self):
         self.canvas = tk.Canvas(self, bg='white',
@@ -133,8 +135,13 @@ class Maze(tk.Tk, object):
         # Get position
         xs, ys = self.s_position()
 
+        # Compute shortest path steps
+        x_diff = abs(xdi - xsi)
+        y_diff = abs(ydi - ysi)
+        min_steps = min(x_diff, y_diff) + abs(x_diff-y_diff)
+
         # return observation
-        return np.append(gcc, [xs, ys])
+        return np.append(gcc, [xs, ys]), min_steps
 
     def step(self, action):
         s = self.canvas.coords(self.rect)
@@ -177,6 +184,7 @@ class Maze(tk.Tk, object):
         xdi, ydi = self.d_index()
         xs, ys = self.s_position()
         s_ = np.append(self.GCC[xdi][ydi][xsi][ysi], [xs, ys])
+        #s_ = self.GCC[xdi][ydi][xsi][ysi]
 
         # print(self.GCC[4][4])
         # print(self.GCC[5][3])
@@ -200,16 +208,20 @@ class Maze(tk.Tk, object):
         #reward = -1
 
         # Euclidean distance
-        reward = -math.sqrt(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))
+        #reward = -10 / 1000.0
+        reward = -math.sqrt(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
+        # Euclidean distance square
+       # reward = -(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
 
         #reward = -(abs(xsi - xdi) + abs(ysi - ydi))
 
         # If doesn't move, then give punishment
-        if base_action[0] == 0 and base_action[1] == 0:
-            reward -= 15
+        #if base_action[0] == 0 and base_action[1] == 0:
+        #    reward -= (50/1000.0)
 
         if xsi == xdi and ysi == ydi:
             done = True
+         #   reward = (1000 / 1000.0)
             reward = 0
         else:
             done = False
@@ -310,7 +322,7 @@ class Maze(tk.Tk, object):
 
         # Save GCC
         #with open('env_data_%d_%d.env' %(des[0], des[1]), 'wb') as f:
-        with open('env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'wb') as f:
+        with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'wb') as f:
             pickle.dump(GCC, f)
 
         print("Environment established.")
@@ -319,12 +331,14 @@ class Maze(tk.Tk, object):
         # Load GCC
         try:
             #with open('env_data_%d_%d.env' %(self.des[0], self.des[1]), 'rb') as f:
-            with open('env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
+            with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
                 self.GCC = pickle.load(f)
         except:
             self.generate_env(self.des, self.ori)
-            with open('env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
+            with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
                 self.GCC = pickle.load(f)
+
+       # print(self.GCC[2][3][4][5])
 
 
 def update():

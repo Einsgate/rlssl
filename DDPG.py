@@ -19,33 +19,37 @@ import numpy as np
 import gym
 from AC_env import Maze
 import time
+import matplotlib.pyplot as plt
 
 
 #####################  hyper parameters  ####################
-#USE_MEMORY = False
-MEMORY_CAPACITY = 20000
+SEED = 1
 
-MAX_EPISODES = 200000
+#USE_MEMORY = False
+MEMORY_CAPACITY = 80000
+
+MAX_EPISODES = 3000 #4100
 MEMORY_FULL = False
-EXPLORE_EP_STEPS = 250
+EXPLORE_EP_STEPS = 200
 MAX_EP_STEPS = 200
-LR_A = 0.001    # learning rate for actor
-LR_C = 0.002    # learning rate for critic
+LR_A = 0.0005    # learning rate for actor
+LR_C = 0.001    # learning rate for critic
 GAMMA = 0.9     # reward discount
 TAU = 0.01      # soft replacement
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 
 RENDER = False
 ENV_NAME = 'Pendulum-v0'
 
-SHOW_EPISODE = 1000
+SHOW_EPISODE = 4000
 SHOW_REWARD = -80
 origins = []
-for i in range(9):
-    for j in range(9):
+from AC_env import MAZE_W
+from AC_env import MAZE_H
+for i in range(MAZE_W):
+    for j in range(MAZE_H):
         origins.append([i, j])
-env = Maze(origins,
-    [[8, 2], [4, 4]])
+
 
 ###############################  DDPG  ####################################
 
@@ -84,18 +88,21 @@ class DDPG(object):
 
         self.sess.run(tf.global_variables_initializer())
 
+    def seed(self, s):
+        np.random.seed(s)
+
     def choose_action(self, s):
         s = s[np.newaxis, :]
         probs = self.sess.run(self.a, {self.S: s})  # get probabilities for all actions
         return probs
-        # return np.random.choice(np.arange(probs.shape[1]), p=probs.ravel())  # return a int
 
     def learn(self):
+        global MEMORY_FULL, MEMORY_CAPACITY
         if self.pointer >= MEMORY_CAPACITY:
+            if MEMORY_FULL == False:
+                print("Start learning.")
             MEMORY_FULL = True
             indices = np.random.choice(MEMORY_CAPACITY, size=BATCH_SIZE)
-        #elif self.pointer >= 2000:
-        #    indices = np.random.choice(self.pointer, size=BATCH_SIZE)
         else:
             return
         bt = self.memory[indices, :]
@@ -133,57 +140,68 @@ class DDPG(object):
 
 ###############################  training  ####################################
 
-# env = gym.make(ENV_NAME)
-# env = env.unwrapped
-# env.seed(1)
-
-
-
-# s_dim = env.observation_space.shape[0]
-# a_dim = env.action_space.shape[0]
-# a_bound = env.action_space.high
+env = Maze(origins,
+    origins)
+env.seed(SEED)
 
 s_dim = env.n_features
 a_dim = env.n_actions
 
-#ddpg = DDPG(a_dim, s_dim, a_bound)
 ddpg = DDPG(a_dim, s_dim)
+ddpg.seed(SEED)
 
-var = 3  # control exploration
-t1 = time.time()
+gap = 0.0
+y_reward = []
+
 for i in range(MAX_EPISODES):
-    s = env.reset()
+    if i >= SHOW_EPISODE: RENDER = False
+    if RENDER:
+        time.sleep(1)
+    s, min_steps = env.reset()
     ep_reward = 0
 
     # Decrease max episode steps when starting to learn
     if MEMORY_FULL:
         EXPLORE_EP_STEPS = MAX_EP_STEPS
-    for j in range(EXPLORE_EP_STEPS):
+    for j in range(1, EXPLORE_EP_STEPS+1):
         if RENDER:
             env.render()
-        #env.render()
+            time.sleep(0.25)
 
-        # Add exploration noise
+        # Choose action and get reward
         act_probs = ddpg.choose_action(s).flatten()
         a = np.random.choice(act_probs.size, p=act_probs)  # return a int
-        # a = np.clip(np.random.normal(a, var), -2, 2)    # add randomness to action selection for exploration
         s_, r, done, info = env.step(a)
 
         ddpg.store_transition(s, act_probs, r, s_)
-
         ddpg.learn()
-        if ddpg.pointer > MEMORY_CAPACITY:
-            var *= .9995    # decay the action randomness
-        #    ddpg.learn()
 
         s = s_
         ep_reward += r
-        if j >= MAX_EP_STEPS-1 or done:
-            print('Episode:', i, ' Reward: %i' % int(ep_reward), 'Explore: %.2f' % var, )
-            if i > SHOW_EPISODE and ep_reward >= SHOW_REWARD: RENDER = True
+        if j >= MAX_EP_STEPS or done:
+            if RENDER:
+                env.render()
+                time.sleep(0.5)
+
+            if i >= SHOW_EPISODE:
+                # Compute gap between the result and the optimal path
+                #print("Gap = %f, gap + %d" %(gap, (j-min_steps)))
+                assert(j >= min_steps)
+                gap += (j - min_steps)
+
+            print('Episode:', i, ' Reward: %.3f' % ep_reward)
+            y_reward.append(ep_reward)
+
             break
 
-print('Running time: ', time.time() - t1)
+avg_gap = gap / (MAX_EPISODES - SHOW_EPISODE)
+#print("Average gap is %f" %(avg_gap))
+print("%f" %(avg_gap))
+
+import pickle
+with open('figures/r_dis', 'wb') as f:
+    pickle.dump(y_reward, f)
+
 
 # """
 # Deep Deterministic Policy Gradient (DDPG) for sound source localization.

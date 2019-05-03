@@ -1,0 +1,3 @@
+[submodule "INF-Generator"]
+	path = INF-Generator
+	url = https://github.com/Einsgate/INF-Generator.git
