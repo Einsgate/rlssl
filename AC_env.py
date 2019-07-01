@@ -17,6 +17,11 @@ import threading
 UNIT = 40   # pixels
 MAZE_H = 9  # grid height
 MAZE_W = 9  # grid width
+SNR = 30
+obstacle_indices = []
+obstacle_indices = [[2, 3], [2, 4], [2, 5],
+                     [5, 2], [6, 2], [7, 2],
+                     [6, 5], [6, 6]]
 
 ## Microphone configuration
 maxDis = 0.2828
@@ -58,20 +63,17 @@ class Maze(tk.Tk, object):
             self.canvas.create_line(x0, y0, x1, y1)
 
         # create origin
-        origin = np.array([20, 20])
+        origin = np.array([UNIT/2, UNIT/2])
 
-        # # hell
-        # hell1_center = origin + np.array([UNIT * 2, UNIT])
-        # self.hell1 = self.canvas.create_rectangle(
-        #     hell1_center[0] - 15, hell1_center[1] - 15,
-        #     hell1_center[0] + 15, hell1_center[1] + 15,
-        #     fill='black')
-        # # hell
-        # hell2_center = origin + np.array([UNIT, UNIT * 2])
-        # self.hell2 = self.canvas.create_rectangle(
-        #     hell2_center[0] - 15, hell2_center[1] - 15,
-        #     hell2_center[0] + 15, hell2_center[1] + 15,
-        #     fill='black')
+        # obstacles
+        self.obstacles = []
+        self.obstacle_indices = obstacle_indices
+        for obstacle in self.obstacle_indices:
+            obstacle_center = origin + np.array([UNIT*obstacle[0], UNIT*obstacle[1]])
+            self.obstacles.append(self.canvas.create_rectangle(
+                obstacle_center[0] - 20, obstacle_center[1] - 20,
+                obstacle_center[0] + 20, obstacle_center[1] + 20,
+                fill='black'))
 
         # create oval
         oval_center = origin + UNIT * 8
@@ -105,7 +107,8 @@ class Maze(tk.Tk, object):
             origin = np.array([ori[0] * UNIT + 20, ori[1] * UNIT + 20])
             sink = np.array([des[0] * UNIT + 20, des[1] * UNIT + 20])
             if not (sink[0] == origin[0] and sink[1] == origin[1]):
-                break
+                if (not (ori in self.obstacle_indices)) and (not (des in self.obstacle_indices)):
+                    break
 
         # Randomize origin
         # while 1:
@@ -175,6 +178,12 @@ class Maze(tk.Tk, object):
                 base_action[1] += UNIT
                 base_action[0] += UNIT
 
+        # If it is going into obstacles, does not move the agent
+        index_ = self.next_index(base_action)
+        if index_ in self.obstacle_indices:
+            base_action[0] = 0
+            base_action[1] = 0
+
         self.canvas.move(self.rect, base_action[0], base_action[1])  # move agent
 
         # p_ = self.canvas.coords(self.rect)  # next position
@@ -209,20 +218,20 @@ class Maze(tk.Tk, object):
 
         # Euclidean distance
         #reward = -10 / 1000.0
-        reward = -math.sqrt(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
+        #reward = -math.sqrt(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
         # Euclidean distance square
-       # reward = -(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
+        reward = -(pow(xsi - xdi, 2) + pow(ysi - ydi, 2))/1000.0
 
         #reward = -(abs(xsi - xdi) + abs(ysi - ydi))
 
         # If doesn't move, then give punishment
-        #if base_action[0] == 0 and base_action[1] == 0:
-        #    reward -= (50/1000.0)
+        if base_action[0] == 0 and base_action[1] == 0:
+            reward -= (50/1000.0)
 
         if xsi == xdi and ysi == ydi:
             done = True
-         #   reward = (1000 / 1000.0)
-            reward = 0
+            reward = (1000 / 1000.0)
+            #reward = 0
         else:
             done = False
 
@@ -250,13 +259,22 @@ class Maze(tk.Tk, object):
         y = (s[1] + s[3]) / 2.0 / UNIT
         return x, y
 
+    def next_index(self, base_action):
+        s = self.canvas.coords(self.rect)
+        x = (s[0] + s[2]) / 2.0
+        y = (s[1] + s[3]) / 2.0
+        x_, y_ = x+base_action[0], y+base_action[1]
+        xi_, yi_ = int(x_/UNIT), int(y_/UNIT)
+        return [xi_, yi_]
+
+
     def render(self):
         #time.sleep(0.1)
         self.update()
 
 
     @staticmethod
-    def function(di, GCC):
+    def function(di, GCC, SNR):
         print("Starting Matlab...")
         eng = matlab.engine.start_matlab()
         print("Matlab engine started.")
@@ -282,7 +300,8 @@ class Maze(tk.Tk, object):
                                                           [xs + 0.1, ys - 0.1, 1.5], [xs + 0.1, ys + 0.1, 1.5]]),
                                            maxDis,
                                            matlab.double([float(MAZE_W), float(MAZE_H), 3.0]),
-                                           matlab.double([xd, yd, 1.5]))
+                                           matlab.double([xd, yd, 1.5]),
+                                           matlab.double(SNR))
 
                     GCC[di][dj][i].append(np.array(res))
                     # print("di = %d, dj = %d, i = %d, j = %d" %(di, dj, i, j))
@@ -307,7 +326,7 @@ class Maze(tk.Tk, object):
         threads = []
 
         for i in range(MAZE_W):
-            t = threading.Thread(target=Maze.function, args=(i, GCC))
+            t = threading.Thread(target=Maze.function, args=(i, GCC, SNR))
             threads.append(t)
             t.start()
         for i in range(MAZE_W):
@@ -322,7 +341,7 @@ class Maze(tk.Tk, object):
 
         # Save GCC
         #with open('env_data_%d_%d.env' %(des[0], des[1]), 'wb') as f:
-        with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'wb') as f:
+        with open('data/env_data_%d_%d_SNR_%d.env' %(MAZE_W, MAZE_H, SNR), 'wb') as f:
             pickle.dump(GCC, f)
 
         print("Environment established.")
@@ -330,12 +349,12 @@ class Maze(tk.Tk, object):
     def load_env(self):
         # Load GCC
         try:
-            #with open('env_data_%d_%d.env' %(self.des[0], self.des[1]), 'rb') as f:
-            with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
+            #with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
+            with open('data/env_data_%d_%d_SNR_%d.env' %(MAZE_W, MAZE_H, SNR), 'rb') as f:
                 self.GCC = pickle.load(f)
         except:
             self.generate_env(self.des, self.ori)
-            with open('data/env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'rb') as f:
+            with open('data/env_data_%d_%d_SNR_%d.env' %(MAZE_W, MAZE_H, SNR), 'rb') as f:
                 self.GCC = pickle.load(f)
 
        # print(self.GCC[2][3][4][5])

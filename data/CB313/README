@@ -1,0 +1,6 @@
+These records are sampled in CB313. The room size is 10m x 4.5m. The room is divided into 1m x 1m squares. The microphone array is put on the center of (3, 4) and the sound source varies in the square which has four corner points (1, 1), (4, 1), (4, 7), (1, 7). The microphone array is square-shaped and the diagonal length is 0.6m.
+
+Name rule:
+output_x_y.wav: x and y are coordinates of the source
+
+output_x_y_z.wav: This file is extracted from output_x_y.wav. x and y are coordinates of the source, z is the channel number.

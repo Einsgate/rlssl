@@ -8,7 +8,7 @@ MAZE_H = 9
 
 maxDis = 0.2828
 
-def function(di, GCC):
+def function(di, GCC, snr):
         print("Starting Matlab...")
         eng = matlab.engine.start_matlab()
         print("Matlab engine started.")
@@ -34,7 +34,8 @@ def function(di, GCC):
                                                           [xs + 0.1, ys - 0.1, 1.5], [xs + 0.1, ys + 0.1, 1.5]]),
                                            maxDis,
                                            matlab.double([float(MAZE_W), float(MAZE_H), 3.0]),
-                                           matlab.double([xd, yd, 1.5]))
+                                           matlab.double([xd, yd, 1.5]),
+                                           float(snr))
 
                     GCC[di][dj][i].append(np.array(res))
                     # print("di = %d, dj = %d, i = %d, j = %d" %(di, dj, i, j))
@@ -55,9 +56,12 @@ def generate_env():
         #xd, yd = 0.5 + des[0], 0.5 + des[1]
 
         threads = []
+        SNR = 40
+
+        print("Generating %d SNR environment..." %(SNR))
 
         for i in range(MAZE_W):
-            t = threading.Thread(target=function, args=(i, GCC))
+            t = threading.Thread(target=function, args=(i, GCC, SNR))
             threads.append(t)
             t.start()
         for i in range(MAZE_W):
@@ -72,7 +76,7 @@ def generate_env():
 
         # Save GCC
         #with open('env_data_%d_%d.env' %(des[0], des[1]), 'wb') as f:
-        with open('env_data_%d_%d.env' %(MAZE_W, MAZE_H), 'wb') as f:
+        with open('data/env_data_%d_%d_SNR_%d.env' %(MAZE_W, MAZE_H, SNR), 'wb') as f:
             pickle.dump(GCC, f)
 
         print("Environment established.")

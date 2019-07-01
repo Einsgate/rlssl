@@ -16,7 +16,7 @@
 % Output:   gcc      - GCC vector()
 %
 %--------------------------------------------------------------------------
-function gcc = gccGenerator(micPos, maxDis, room, soundPos)
+function gcc = gccGenerator(micPos, maxDis, room, soundPos, snr)
 
 %% Initialize arguments
 LL = room;                   % Room dimensions in meters (width, depth, hight)
@@ -36,7 +36,7 @@ order = 2;                        % Reflection order
 if size(in,1) > size(in,2)
     in = in';
 end
-in = [in(fs+1:2*fs)];
+in = [in(fs+1:2*fs)]
 len = length(in);
 
 % Stationary source positions
@@ -52,6 +52,7 @@ for mm = 1:M
     rp_path(1:end, 3, mm) = rp(mm, 3);    
 end
 
+
 %% Generate micphone signals
 %for i = 1:10
 %tic
@@ -60,6 +61,15 @@ end
 %end
 %toc
 %end
+
+
+
+% Add noise
+for i = 1:M
+    %out(i, 100:110)
+    out(i, :) = awgn(out(i, :), snr, 'measured');
+    %out(i, 100:110)
+end
 
 %% Calculate GCC vectors
 width = ceil(maxDis / c * fs);              % Half of gcc_width
@@ -99,7 +109,12 @@ for i = 1:M
     end
 end 
 
+% for i = 1:npairs
+% [val, idx] = max(gcc(i, :))
+% end
+
 gcc = num2cell(reshape(gcc, 1, []));
+
 %size(gcc);
 %res = {gcc_width, npairs};
 %len = res{1} * npairs;

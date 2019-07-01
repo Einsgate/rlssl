@@ -28,7 +28,7 @@ SEED = 1
 #USE_MEMORY = False
 MEMORY_CAPACITY = 80000
 
-MAX_EPISODES = 3000 #4100
+MAX_EPISODES = 40000
 MEMORY_FULL = False
 EXPLORE_EP_STEPS = 200
 MAX_EP_STEPS = 200
@@ -37,11 +37,12 @@ LR_C = 0.001    # learning rate for critic
 GAMMA = 0.9     # reward discount
 TAU = 0.01      # soft replacement
 BATCH_SIZE = 128
+val = 1       # exploration factor
 
 RENDER = False
-ENV_NAME = 'Pendulum-v0'
+#ENV_NAME = 'Pendulum-v0'
 
-SHOW_EPISODE = 4000
+SHOW_EPISODE = 3000
 SHOW_REWARD = -80
 origins = []
 from AC_env import MAZE_W
@@ -150,13 +151,13 @@ a_dim = env.n_actions
 ddpg = DDPG(a_dim, s_dim)
 ddpg.seed(SEED)
 
-gap = 0.0
-y_reward = []
+#gap = 0.0
+#y_reward = []
 
 for i in range(MAX_EPISODES):
-    if i >= SHOW_EPISODE: RENDER = False
+    if i >= SHOW_EPISODE: RENDER = True
     if RENDER:
-        time.sleep(1)
+        time.sleep(0.5)
     s, min_steps = env.reset()
     ep_reward = 0
 
@@ -166,11 +167,18 @@ for i in range(MAX_EPISODES):
     for j in range(1, EXPLORE_EP_STEPS+1):
         if RENDER:
             env.render()
-            time.sleep(0.25)
+            time.sleep(0.15)
 
         # Choose action and get reward
         act_probs = ddpg.choose_action(s).flatten()
-        a = np.random.choice(act_probs.size, p=act_probs)  # return a int
+
+        # Add exploration
+        if RENDER:
+            val = 1
+        if np.random.uniform() < val:
+            a = np.random.choice(act_probs.size)               # Randomly choose one
+        else:
+            a = np.random.choice(act_probs.size, p=act_probs)  # return a int
         s_, r, done, info = env.step(a)
 
         ddpg.store_transition(s, act_probs, r, s_)
@@ -187,20 +195,20 @@ for i in range(MAX_EPISODES):
                 # Compute gap between the result and the optimal path
                 #print("Gap = %f, gap + %d" %(gap, (j-min_steps)))
                 assert(j >= min_steps)
-                gap += (j - min_steps)
+                #gap += (j - min_steps)
 
             print('Episode:', i, ' Reward: %.3f' % ep_reward)
-            y_reward.append(ep_reward)
+            #y_reward.append(ep_reward)
 
             break
 
-avg_gap = gap / (MAX_EPISODES - SHOW_EPISODE)
+#avg_gap = gap / (MAX_EPISODES - SHOW_EPISODE)
 #print("Average gap is %f" %(avg_gap))
-print("%f" %(avg_gap))
+#print("%f" %(avg_gap))
 
-import pickle
-with open('figures/r_dis', 'wb') as f:
-    pickle.dump(y_reward, f)
+#import pickle
+#with open('figures/r_dis', 'wb') as f:
+#    pickle.dump(y_reward, f)
 
 
 # """
